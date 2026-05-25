@@ -1,9 +1,10 @@
 ﻿{
     "docs_path":  "C:\\Users\\multizzang\\OneDrive\\문서\\New project\\docs",
-    "docs_size_bytes":  1484677,
+    "docs_size_bytes":  1488163,
     "total_products":  267,
     "active_cards":  242,
-    "initial_render_limit":  30,
+    "initial_render_limit":  242,
+    "load_more_button":  false,
     "concours_count":  52,
     "rework_count":  25,
     "data_image_uri_count":  0,

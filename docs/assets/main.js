@@ -6,8 +6,7 @@ const COORDS = PAGE_DATA.coords || {};
 const MAP_SOURCE = PAGE_DATA.mapSource || {};
 const CATEGORIES = ["배전기자재","케이블","계측/진단","안전공구","시공공법","EMS/DER","수배전반","배전DX"];
 const FAVORITE_KEY = "jeca-2026-favorites-pages";
-const PAGE_SIZE = 30;
-const state = { query:"", category:"전체", view:"all", favoriteOnly:false, limit:PAGE_SIZE, favorites:new Set(JSON.parse(localStorage.getItem(FAVORITE_KEY)||"[]")), expanded:new Set() };
+const state = { query:"", category:"전체", view:"all", favoriteOnly:false, favorites:new Set(JSON.parse(localStorage.getItem(FAVORITE_KEY)||"[]")), expanded:new Set() };
 const $ = (selector) => document.querySelector(selector);
 
 function list(value){ return Array.isArray(value) ? value : (value ? [value] : []); }
@@ -37,6 +36,7 @@ function splitPreview(text,maxLength=180){
   return { previewText, remainingText, hasMore:remainingText.trim().length>0 };
 }
 function productConcours(product){
+  if (product.is_concours_candidate === true || String(product.source_type||"").toLowerCase()==="official_jeca") return true;
   if (list(product.source_urls).some((item)=>String(item).includes("concours.php"))) return true;
   const company=normalize(product.company_name), name=normalize(product.product_name_ja);
   return CONCOURS.some((item)=>{
@@ -55,16 +55,11 @@ function filteredProducts(){
     return queryHit && categoryHit && favoriteHit && concoursHit;
   });
 }
-function resetLimit(){ state.limit=PAGE_SIZE; }
 function updateButtons(){
   $("#allCards").setAttribute("aria-pressed", String(state.view==="all"));
   $("#concoursOnly").setAttribute("aria-pressed", String(state.view==="concours"));
   $("#favoriteOnly").setAttribute("aria-pressed", String(state.favoriteOnly));
-  $("#reworkOnly").setAttribute("aria-pressed", String(state.view==="rework"));
-  $("#cardsArea").hidden = state.view==="rework";
-  $("#moreWrap").hidden = state.view==="rework";
-  $("#concoursSection").hidden = state.view==="rework";
-  $("#reworkSection").hidden = state.view!=="rework" && state.view!=="all";
+  $("#reworkOnly").setAttribute("aria-pressed", String($("#reworkSection").open));
 }
 function renderFilters(){
   const available=new Set(activeProducts().flatMap((product)=>list(product.category)));
@@ -109,16 +104,12 @@ function cardHtml(product){
 function renderCards(){
   const active=activeProducts();
   const filtered=filteredProducts();
-  const shown=filtered.slice(0,state.limit);
   $("#totalCount").textContent=active.length;
   $("#visibleCount").textContent=filtered.length;
   $("#favoriteCount").textContent=active.filter((product)=>state.favorites.has(product.id)).length;
-  $("#renderedCount").textContent=shown.length;
+  $("#renderedCount").textContent=filtered.length;
   updateButtons();
-  $("#cards").innerHTML=shown.length ? shown.map(cardHtml).join("") : `<div class="empty">조건에 맞는 제품 카드가 없습니다.</div>`;
-  const more=state.limit < filtered.length && state.view!=="rework";
-  $("#moreWrap").hidden=!more;
-  $("#moreButton").textContent=more ? `더 보기 (${Math.min(PAGE_SIZE, filtered.length-state.limit)}개 추가)` : "더 보기";
+  $("#cards").innerHTML=filtered.length ? filtered.map(cardHtml).join("") : `<div class="empty">조건에 맞는 제품 카드가 없습니다.</div>`;
 }
 function renderConcours(){
   $("#concoursCount").textContent=CONCOURS.length;
@@ -126,8 +117,7 @@ function renderConcours(){
 }
 function statusLabel(status){ return ({pending:"대기",unresolved:"보류",upgraded:"보강"})[status] || status || "대기"; }
 function reworkRows(){
-  const query=state.query.trim().toLowerCase();
-  return REWORK.filter((item)=>item.status!=="upgraded").filter((item)=>!query || [item.company_id,item.company_name,item.current_product_name,item.reason,item.status].join(" ").toLowerCase().includes(query));
+  return REWORK.filter((item)=>item.status!=="upgraded");
 }
 function renderRework(){
   const rows=reworkRows();
@@ -168,20 +158,51 @@ function openMap(product){
   $("#mapDrawer").setAttribute("aria-hidden","false");
 }
 function closeMap(){ $("#mapDrawer").classList.remove("is-open"); $("#mapDrawer").setAttribute("aria-hidden","true"); }
-function setView(view){ state.view = state.view===view && view!=="all" ? "all" : view; resetLimit(); renderCards(); renderRework(); }
+function collapseReferenceSections(){
+  $("#concoursSection").open=false;
+  $("#reworkSection").open=false;
+  updateSectionToggles();
+}
+function updateSectionToggles(){
+  document.querySelectorAll(".collapsible-section").forEach((section)=>{
+    const label=section.querySelector(".section-toggle");
+    if (label) label.textContent = section.open ? "접기" : "펼치기";
+  });
+  updateButtons();
+}
+function setView(view){
+  state.view = view;
+  state.favoriteOnly = false;
+  collapseReferenceSections();
+  renderCards();
+}
+function showFavoriteOnly(){
+  state.favoriteOnly=!state.favoriteOnly;
+  if (state.favoriteOnly) state.view="all";
+  collapseReferenceSections();
+  renderCards();
+}
+function openReworkSection(){
+  $("#reworkSection").open=true;
+  $("#concoursSection").open=false;
+  updateSectionToggles();
+  renderRework();
+  $("#reworkSection").scrollIntoView({behavior:"smooth", block:"start"});
+}
 function init(){
   renderFilters();
   renderCards();
   renderConcours();
   renderRework();
   configureMapLink();
-  $("#searchInput").addEventListener("input",(event)=>{ state.query=event.target.value; resetLimit(); renderCards(); renderRework(); });
-  $("#categoryFilters").addEventListener("click",(event)=>{ const button=event.target.closest("[data-category]"); if(!button)return; state.category=button.dataset.category; resetLimit(); renderFilters(); renderCards(); });
+  updateSectionToggles();
+  $("#searchInput").addEventListener("input",(event)=>{ state.query=event.target.value; renderCards(); });
+  $("#categoryFilters").addEventListener("click",(event)=>{ const button=event.target.closest("[data-category]"); if(!button)return; state.category=button.dataset.category; renderFilters(); renderCards(); });
   $("#allCards").addEventListener("click",()=>setView("all"));
   $("#concoursOnly").addEventListener("click",()=>setView("concours"));
-  $("#reworkOnly").addEventListener("click",()=>setView("rework"));
-  $("#favoriteOnly").addEventListener("click",()=>{ state.favoriteOnly=!state.favoriteOnly; resetLimit(); renderCards(); });
-  $("#moreButton").addEventListener("click",()=>{ state.limit += PAGE_SIZE; renderCards(); });
+  $("#reworkOnly").addEventListener("click",openReworkSection);
+  $("#favoriteOnly").addEventListener("click",showFavoriteOnly);
+  document.querySelectorAll(".collapsible-section").forEach((section)=>section.addEventListener("toggle",updateSectionToggles));
   $("#cards").addEventListener("click",(event)=>{
     const fav=event.target.closest("[data-favorite]");
     if (fav) { state.favorites.has(fav.dataset.favorite) ? state.favorites.delete(fav.dataset.favorite) : state.favorites.add(fav.dataset.favorite); saveFavorites(); renderCards(); return; }

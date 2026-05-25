@@ -11,7 +11,7 @@
     <div class="header-inner">
       <p class="eyebrow">JECA FAIR 2026 · GitHub Pages</p>
       <h1>출전자 대표 제품 심화 카드</h1>
-      <p class="subtitle">제품 이미지는 인터넷 연결 시 외부 URL에서 지연 로딩하고, 첫 화면은 30개 카드만 표시하는 모바일 공유용 정적 웹사이트입니다.</p>
+      <p class="subtitle">제품 이미지는 인터넷 연결 시 외부 URL에서 지연 로딩하고, 제품 상세와 참고 목록은 필요할 때만 펼쳐 보는 모바일 공유용 정적 웹사이트입니다.</p>
       <div class="source-links" aria-label="공식 출처">
         <a href="https://www.jecafair.jp/exhibitor/" target="_blank" rel="noopener">공식 출전자 일람</a>
         <a href="https://www.jecafair.jp/event/concours.php" target="_blank" rel="noopener">공식 제품콩쿠르</a>
@@ -35,24 +35,31 @@
     <section class="summary-grid" aria-label="요약">
       <div class="stat"><strong id="totalCount">0</strong><span>표시 대상 카드</span></div>
       <div class="stat"><strong id="visibleCount">0</strong><span>필터 결과</span></div>
-      <div class="stat"><strong id="renderedCount">0</strong><span>현재 렌더링</span></div>
+      <div class="stat"><strong id="renderedCount">0</strong><span>화면 표시 카드</span></div>
       <div class="stat"><strong id="favoriteCount">0</strong><span>즐겨찾기</span></div>
     </section>
 
     <section id="cardsArea">
       <section class="card-grid" id="cards" aria-label="제품 카드"></section>
-      <div class="more-wrap" id="moreWrap"><button class="more-btn" id="moreButton" type="button">더 보기</button></div>
     </section>
 
-    <section class="data-section" id="concoursSection" aria-label="제품콩쿠르 공식 후보">
-      <div class="section-head"><div><p class="eyebrow">Official concours</p><h2>제품콩쿠르 공식 후보 목록</h2></div><span class="count-chip"><strong id="concoursCount">0</strong>개</span></div>
+    <details class="data-section collapsible-section" id="concoursSection">
+      <summary class="section-head" aria-label="제품콩쿠르 공식 후보 펼치기">
+        <span><span class="eyebrow">Official concours</span><span class="section-title">제품콩쿠르 공식 후보 목록 (<strong id="concoursCount">0</strong>개)</span></span>
+        <span class="section-toggle" aria-hidden="true">펼치기</span>
+      </summary>
+      <p class="section-note">JECA 공식 제품콩쿠르 후보 52개를 별도로 정리한 참고 목록입니다.</p>
       <div class="concours-list" id="concoursList"></div>
-    </section>
+    </details>
 
-    <section class="data-section" id="reworkSection" aria-label="재조사 대기 목록">
-      <div class="section-head"><div><p class="eyebrow">Rework queue</p><h2>재조사 대기 목록</h2></div><span class="count-chip"><strong id="reworkCount">0</strong>개</span></div>
+    <details class="data-section collapsible-section admin-section" id="reworkSection">
+      <summary class="section-head" aria-label="재조사 대기 목록 펼치기">
+        <span><span class="eyebrow">Rework queue</span><span class="section-title">재조사 대기 목록 (<strong id="reworkCount">0</strong>개, 관리자용)</span></span>
+        <span class="section-toggle" aria-hidden="true">펼치기</span>
+      </summary>
+      <p class="section-note">공식 제품 이미지 또는 상세 사양을 충분히 확보하지 못해 카드 표시에서 제외한 항목입니다.</p>
       <div class="table-wrap"><table class="rework-table"><thead><tr><th>번호</th><th>회사명</th><th>현재 후보 제품</th><th>상태</th><th>사유와 원문 후보</th></tr></thead><tbody id="reworkRows"></tbody></table></div>
-    </section>
+    </details>
   </main>
 
   <aside class="map-drawer" id="mapDrawer" aria-hidden="true" aria-label="부스 지도 패널">
