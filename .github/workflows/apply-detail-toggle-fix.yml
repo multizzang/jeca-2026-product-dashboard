@@ -1,0 +1,32 @@
+name: Apply detail toggle fix
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-detail-toggle-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply updated docs assets
+        run: |
+          set -euo pipefail
+          curl -L "https://tmpfiles.org/dl/wuwzwi0Sgdol/jeca-detail-toggle-fix.zip" -o /tmp/jeca-detail-toggle-fix.zip
+          unzip -o /tmp/jeca-detail-toggle-fix.zip
+          test -f docs/assets/main.js
+          test -f docs/assets/style.css
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/main.js docs/assets/style.css
+          git rm --ignore-unmatch .github/workflows/apply-detail-toggle-fix.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix detail view duplication"
+          git push
