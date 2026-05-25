@@ -20,8 +20,10 @@ jobs:
 
       - name: Download prepared docs bundle
         run: |
-          curl -fL "https://tmpfiles.org/dl/wVwWwin3dxox/jeca-pages-bundle.zip" -o /tmp/jeca-pages-bundle.zip
+          curl -fL "https://tmpfiles.org/dl/wkwKwdnfWbzT/jeca-pages-bundle-posix.zip" -o /tmp/jeca-pages-bundle.zip
           unzip -q /tmp/jeca-pages-bundle.zip -d /tmp/jeca-pages-bundle
+          test -f /tmp/jeca-pages-bundle/docs/index.html
+          test -f /tmp/jeca-pages-bundle/docs/data/products.json
 
       - name: Replace Pages files
         run: |
