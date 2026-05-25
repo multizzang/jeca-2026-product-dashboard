@@ -1,0 +1,37 @@
+name: Apply layout cleanup
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-layout-cleanup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply updated Pages layout
+        run: |
+          set -euo pipefail
+          curl -L "https://tmpfiles.org/dl/wUw4wX0BRZtX/jeca-layout-cleanup.zip" -o /tmp/jeca-layout-cleanup.zip
+          unzip -o /tmp/jeca-layout-cleanup.zip
+          test -f docs/index.html
+          test -f docs/assets/main.js
+          test -f docs/assets/style.css
+          test -f docs/pages_stats.json
+          grep -q "collapsible-section" docs/index.html
+          grep -q "function openReworkSection" docs/assets/main.js
+          ! grep -q "moreButton" docs/index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html docs/assets/main.js docs/assets/style.css docs/pages_stats.json
+          git rm --ignore-unmatch .github/workflows/apply-layout-cleanup.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Simplify GitHub Pages dashboard layout"
+          git push
