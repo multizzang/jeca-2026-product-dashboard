@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Local build outputs and large share bundles
+release/
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+~$*
+
+# Local caches
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+.pytest_cache/
+__pycache__/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keep GitHub Pages deployment files
+!docs/
