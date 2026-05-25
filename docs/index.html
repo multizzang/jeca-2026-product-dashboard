@@ -1,0 +1,84 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JECA FAIR 2026 대표 제품 카드</title>
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <p class="eyebrow">JECA FAIR 2026 · GitHub Pages</p>
+      <h1>출전자 대표 제품 심화 카드</h1>
+      <p class="subtitle">제품 이미지는 인터넷 연결 시 외부 URL에서 지연 로딩하고, 첫 화면은 30개 카드만 표시하는 모바일 공유용 정적 웹사이트입니다.</p>
+      <div class="source-links" aria-label="공식 출처">
+        <a href="https://www.jecafair.jp/exhibitor/" target="_blank" rel="noopener">공식 출전자 일람</a>
+        <a href="https://www.jecafair.jp/event/concours.php" target="_blank" rel="noopener">공식 제품콩쿠르</a>
+        <a id="headerMapLink" target="_blank" rel="noopener" hidden>공식 맵/PDF</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="toolbar" aria-label="검색과 필터">
+    <div class="toolbar-inner">
+      <label class="search-box"><span>검색</span><input id="searchInput" type="search" placeholder="회사명, 제품명, 분야, 키워드"></label>
+      <div class="filters" id="categoryFilters" aria-label="분야 필터"></div>
+      <button class="toggle-btn" id="allCards" type="button" aria-pressed="true">전체 카드</button>
+      <button class="toggle-btn" id="concoursOnly" type="button" aria-pressed="false">제품콩쿠르만 보기</button>
+      <button class="toggle-btn" id="favoriteOnly" type="button" aria-pressed="false">즐겨찾기만 보기</button>
+      <button class="toggle-btn" id="reworkOnly" type="button" aria-pressed="false">재조사 대기 목록</button>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <section class="summary-grid" aria-label="요약">
+      <div class="stat"><strong id="totalCount">0</strong><span>표시 대상 카드</span></div>
+      <div class="stat"><strong id="visibleCount">0</strong><span>필터 결과</span></div>
+      <div class="stat"><strong id="renderedCount">0</strong><span>현재 렌더링</span></div>
+      <div class="stat"><strong id="favoriteCount">0</strong><span>즐겨찾기</span></div>
+    </section>
+
+    <section id="cardsArea">
+      <section class="card-grid" id="cards" aria-label="제품 카드"></section>
+      <div class="more-wrap" id="moreWrap"><button class="more-btn" id="moreButton" type="button">더 보기</button></div>
+    </section>
+
+    <section class="data-section" id="concoursSection" aria-label="제품콩쿠르 공식 후보">
+      <div class="section-head"><div><p class="eyebrow">Official concours</p><h2>제품콩쿠르 공식 후보 목록</h2></div><span class="count-chip"><strong id="concoursCount">0</strong>개</span></div>
+      <div class="concours-list" id="concoursList"></div>
+    </section>
+
+    <section class="data-section" id="reworkSection" aria-label="재조사 대기 목록">
+      <div class="section-head"><div><p class="eyebrow">Rework queue</p><h2>재조사 대기 목록</h2></div><span class="count-chip"><strong id="reworkCount">0</strong>개</span></div>
+      <div class="table-wrap"><table class="rework-table"><thead><tr><th>번호</th><th>회사명</th><th>현재 후보 제품</th><th>상태</th><th>사유와 원문 후보</th></tr></thead><tbody id="reworkRows"></tbody></table></div>
+    </section>
+  </main>
+
+  <aside class="map-drawer" id="mapDrawer" aria-hidden="true" aria-label="부스 지도 패널">
+    <div class="drawer-backdrop" data-close-map></div>
+    <div class="drawer-panel">
+      <div class="drawer-head"><div><p class="eyebrow">Booth map</p><h2 id="mapTitle">부스 위치</h2></div><button class="icon-btn" type="button" data-close-map aria-label="지도 패널 닫기">×</button></div>
+      <div class="booth-chip" id="mapBooth">Booth</div>
+      <div class="map-meta" aria-label="부스 지도 정보">
+        <div><span>회사</span><strong id="mapCompany">-</strong></div>
+        <div><span>제품</span><strong id="mapProduct">-</strong></div>
+        <div><span>Hall</span><strong id="mapHall">-</strong></div>
+        <div><span>좌표</span><strong id="mapCoordStatus">-</strong></div>
+      </div>
+      <div class="mini-map" aria-label="Hall 단위 간단 지도">
+        <div class="mini-hall" data-hall="Hall 3">Hall 3</div>
+        <div class="mini-hall" data-hall="Hall 2">Hall 2</div>
+        <div class="mini-hall" data-hall="Hall 1">Hall 1</div>
+        <div class="mini-hall" data-hall="Hall 8">Hall 8</div>
+      </div>
+      <p class="map-note" id="mapNote">정확 좌표가 아직 없어 Hall 단위 표시로 안내합니다.</p>
+      <a class="primary-link" id="mapOfficialLink" target="_blank" rel="noopener" hidden>공식 맵/PDF 열기</a>
+      <button class="primary-link disabled-link" id="mapOfficialDisabled" type="button" disabled hidden>공식 상세 부스맵 미확보</button>
+    </div>
+  </aside>
+
+  <script src="./data/app_data.js" defer></script>
+  <script src="./assets/main.js" defer></script>
+</body>
+</html>
