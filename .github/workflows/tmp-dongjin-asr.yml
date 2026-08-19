@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work/chunks work/model work/output work/secure
-          gdown --id '${{ matrix.file_id }}' -O work/input.m4a
+          gdown '${{ matrix.file_id }}' -O work/input.m4a
           test -s work/input.m4a
           ffprobe -v error -show_format -show_streams -of json work/input.m4a > work/output/ffprobe.json
           sha256sum work/input.m4a > work/output/source-audio.sha256
