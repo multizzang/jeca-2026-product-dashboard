@@ -1,0 +1,34 @@
+name: Temporary Gaon VAD model artifact
+
+on:
+  pull_request:
+    paths:
+      - 'tmp-gaon-vad-trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  package-vad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download official Silero VAD model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model
+          curl -L --fail --retry 5 --retry-all-errors --silent --show-error \
+            -o model/ggml-silero-v6.2.0.bin \
+            'https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin'
+          test "$(stat -c '%s' model/ggml-silero-v6.2.0.bin)" -gt 500000
+          sha256sum model/ggml-silero-v6.2.0.bin | tee model/SHA256SUMS.txt
+
+      - name: Upload VAD model
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-vad-silero-v6.2.0
+          path: model/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
