@@ -1,0 +1,171 @@
+name: Temporary HanwooTech ASR transcription
+
+on:
+  push:
+    branches:
+      - tmp/hanwootech-asr-20260819
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Install transcription dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install 'faster-whisper==1.2.0' 'gdown>=5.2.0'
+          ffmpeg -version | head -1
+
+      - name: Download HanwooTech recording
+        shell: bash
+        env:
+          DRIVE_FILE_ID: 1T02fFPzdZI-FjUojz4czALj4Sd1uvaCv
+        run: |
+          set -euxo pipefail
+          gdown --id "$DRIVE_FILE_ID" -O hanwootech.m4a
+          test -s hanwootech.m4a
+          ls -lh hanwootech.m4a
+          duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 hanwootech.m4a)
+          echo "duration=${duration}"
+          python - <<'PY'
+          import subprocess
+          d = float(subprocess.check_output([
+              'ffprobe','-v','error','-show_entries','format=duration',
+              '-of','default=nw=1:nk=1','hanwootech.m4a'
+          ], text=True).strip())
+          assert 3700 < d < 3800, d
+          PY
+
+      - name: Transcribe in short multilingual chunks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p asr/chunks asr/output
+          ffmpeg -hide_banner -loglevel error -i hanwootech.m4a \
+            -ac 1 -ar 16000 -c:a pcm_s16le \
+            -f segment -segment_time 60 -reset_timestamps 1 \
+            asr/chunks/chunk_%04d.wav
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          import math
+          import pathlib
+          import subprocess
+          from faster_whisper import WhisperModel
+
+          ROOT = pathlib.Path('asr')
+          CHUNKS = sorted((ROOT / 'chunks').glob('chunk_*.wav'))
+          OUT = ROOT / 'output'
+          OUT.mkdir(parents=True, exist_ok=True)
+          PROMPT = (
+              '한전 전력연구원, 동경전력PG, TDS, 한우테크, 서울본부, 콘크리트전주, '
+              '배전지지물, 내부진단, PC강봉 파단, 강봉 절손, 비파괴검사, 진단장비, '
+              '전주진단, 초음파, 자기장, 센서, 일본 수출, 공동연구, 기술교류. '
+              '韓国電力公社, 電力研究院, 東京電力パワーグリッド, TDS, ハヌテック, '
+              'ソウル本部, コンクリート電柱, 支持物, 内部診断, PC鋼棒破断, 非破壊検査, '
+              '診断装置, 超音波, 磁場, センサー, 日本輸出, 共同研究, 技術交流。'
+          )
+
+          model = WhisperModel(
+              'small',
+              device='cpu',
+              compute_type='int8',
+              cpu_threads=4,
+              num_workers=1,
+              download_root='asr/model-cache',
+          )
+
+          all_segments = []
+          language_ledger = []
+          chunk_seconds = 60.0
+          for index, chunk in enumerate(CHUNKS):
+              segments, info = model.transcribe(
+                  str(chunk),
+                  language=None,
+                  beam_size=2,
+                  best_of=2,
+                  temperature=0.0,
+                  vad_filter=True,
+                  vad_parameters={
+                      'min_silence_duration_ms': 250,
+                      'speech_pad_ms': 150,
+                  },
+                  condition_on_previous_text=False,
+                  initial_prompt=PROMPT,
+                  word_timestamps=False,
+              )
+              base = index * chunk_seconds
+              ledger = {
+                  'chunk': chunk.name,
+                  'base_seconds': base,
+                  'language': info.language,
+                  'language_probability': float(info.language_probability),
+                  'duration': float(info.duration),
+                  'duration_after_vad': float(info.duration_after_vad),
+              }
+              language_ledger.append(ledger)
+              chunk_rows = []
+              for seg in segments:
+                  row = {
+                      'chunk': chunk.name,
+                      'chunk_language': info.language,
+                      'chunk_language_probability': float(info.language_probability),
+                      'start': base + float(seg.start),
+                      'end': base + float(seg.end),
+                      'text': seg.text.strip(),
+                      'avg_logprob': float(seg.avg_logprob),
+                      'no_speech_prob': float(seg.no_speech_prob),
+                      'compression_ratio': float(seg.compression_ratio),
+                  }
+                  if row['text']:
+                      all_segments.append(row)
+                      chunk_rows.append(row)
+              print(json.dumps({**ledger, 'segments': len(chunk_rows)}, ensure_ascii=False), flush=True)
+
+          def ts(seconds: float, srt: bool = False) -> str:
+              ms = max(0, int(round(seconds * 1000)))
+              h, rem = divmod(ms, 3_600_000)
+              m, rem = divmod(rem, 60_000)
+              s, milli = divmod(rem, 1000)
+              sep = ',' if srt else '.'
+              return f'{h:02d}:{m:02d}:{s:02d}{sep}{milli:03d}'
+
+          (OUT / 'transcript.json').write_text(
+              json.dumps({'languages': language_ledger, 'segments': all_segments}, ensure_ascii=False, indent=2),
+              encoding='utf-8',
+          )
+          with (OUT / 'transcript.txt').open('w', encoding='utf-8') as f:
+              for row in all_segments:
+                  f.write(
+                      f"[{ts(row['start'])} --> {ts(row['end'])}] "
+                      f"[{row['chunk_language']} {row['chunk_language_probability']:.3f}] "
+                      f"{row['text']}\n"
+                  )
+          with (OUT / 'transcript.srt').open('w', encoding='utf-8') as f:
+              for idx, row in enumerate(all_segments, 1):
+                  f.write(f'{idx}\n{ts(row["start"], True)} --> {ts(row["end"], True)}\n{row["text"]}\n\n')
+          with (OUT / 'language-ledger.json').open('w', encoding='utf-8') as f:
+              json.dump(language_ledger, f, ensure_ascii=False, indent=2)
+
+          print(f'WROTE {len(all_segments)} segments from {len(CHUNKS)} chunks')
+          PY
+          wc -l asr/output/transcript.txt
+          sed -n '1,80p' asr/output/transcript.txt
+
+      - name: Upload transcript artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanwootech-transcript
+          path: asr/output/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 1
