@@ -1,9 +1,9 @@
 name: Temporary Gaon Cable bilingual ASR
 
 on:
-  push:
-    branches:
-      - tmp-gaon-asr-20260819
+  pull_request:
+    paths:
+      - 'tmp-gaon-asr-trigger.txt'
 
 permissions:
   contents: read
