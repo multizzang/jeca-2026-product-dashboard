@@ -21,11 +21,12 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install 'faster-whisper==1.2.0' 'gdown>=5.2.0'
-          ffmpeg -version | head -1
+          python -m pip install 'faster-whisper==1.2.0' 'gdown>=5.2.0' 'imageio-ffmpeg>=0.6.0'
+          python - <<'PY'
+          import imageio_ffmpeg
+          print(imageio_ffmpeg.get_ffmpeg_exe())
+          PY
 
       - name: Download HanwooTech recording
         shell: bash
@@ -36,14 +37,11 @@ jobs:
           gdown "$DRIVE_FILE_ID" -O hanwootech.m4a
           test -s hanwootech.m4a
           ls -lh hanwootech.m4a
-          duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 hanwootech.m4a)
-          echo "duration=${duration}"
           python - <<'PY'
-          import subprocess
-          d = float(subprocess.check_output([
-              'ffprobe','-v','error','-show_entries','format=duration',
-              '-of','default=nw=1:nk=1','hanwootech.m4a'
-          ], text=True).strip())
+          import av
+          with av.open('hanwootech.m4a') as container:
+              d = float(container.duration / av.time_base)
+          print(f'duration={d}')
           assert 3700 < d < 3800, d
           PY
 
@@ -54,7 +52,12 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p asr/chunks asr/output
-          ffmpeg -hide_banner -loglevel error -i hanwootech.m4a \
+          FFMPEG="$(python - <<'PY'
+          import imageio_ffmpeg
+          print(imageio_ffmpeg.get_ffmpeg_exe())
+          PY
+          )"
+          "$FFMPEG" -hide_banner -loglevel error -i hanwootech.m4a \
             -ac 1 -ar 16000 -c:a pcm_s16le \
             -f segment -segment_time 60 -reset_timestamps 1 \
             asr/chunks/chunk_%04d.wav
@@ -72,7 +75,7 @@ jobs:
               '한전 전력연구원, 동경전력PG, TDS, 한우테크, 서울본부, 콘크리트전주, '
               '배전지지물, 내부진단, PC강봉 파단, 강봉 절손, 비파괴검사, 진단장비, '
               '전주진단, 초음파, 자기장, 센서, 일본 수출, 공동연구, 기술교류. '
-              '韓国電力公社, 電力研究院, 東京電力パワーグリッド, TDS, ハヌテック, '
+              '韓国電力公社, 電力研究院, 東京電力パワーグリッド, TDS, HANWOOTECH, '
               'ソウル本部, コンクリート電柱, 支持物, 内部診断, PC鋼棒破断, 非破壊検査, '
               '診断装置, 超音波, 磁場, センサー, 日本輸出, 共同研究, 技術交流。'
           )
@@ -93,8 +96,8 @@ jobs:
               segments, info = model.transcribe(
                   str(chunk),
                   language=None,
-                  beam_size=2,
-                  best_of=2,
+                  beam_size=1,
+                  best_of=1,
                   temperature=0.0,
                   vad_filter=True,
                   vad_parameters={
