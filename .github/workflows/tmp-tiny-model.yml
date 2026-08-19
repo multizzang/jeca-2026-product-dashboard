@@ -1,4 +1,4 @@
-name: Temporary tiny Whisper model artifact
+name: Temporary Whisper transcription bundle
 
 on:
   pull_request:
@@ -9,26 +9,47 @@ permissions:
   contents: read
 
 jobs:
-  package-model:
+  package-bundle:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - name: Download official multilingual tiny q5 model
+      - name: Download multilingual small q5 model
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p model
-          curl -L --fail --retry 5 --retry-all-errors --silent --show-error \
-            -o model/ggml-tiny-q5_1.bin \
-            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true'
-          test "$(stat -c '%s' model/ggml-tiny-q5_1.bin)" -gt 20000000
-          sha256sum model/ggml-tiny-q5_1.bin | tee model/SHA256SUMS.txt
+          set -euxo pipefail
+          mkdir -p model-parts package
+          MODEL_NAME='ggml-small-q5_1.bin'
+          for suffix in aa ab ac ad ae af ag ah ai aj; do
+            curl -L --fail --retry 5 --retry-all-errors --silent --show-error \
+              -o "model-parts/${MODEL_NAME}.part-${suffix}" \
+              "https://raw.githubusercontent.com/advexplorer/whisper/refs/heads/main/${MODEL_NAME}.part-${suffix}"
+          done
+          cat model-parts/${MODEL_NAME}.part-* > "package/${MODEL_NAME}"
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  package/ggml-small-q5_1.bin' | sha256sum -c -
 
-      - name: Upload model
+      - name: Build static whisper-cli
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp.git whisper.cpp
+          cmake -S whisper.cpp -B whisper.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON
+          cmake --build whisper.cpp/build --config Release -j2
+          cp whisper.cpp/build/bin/whisper-cli package/whisper-cli
+          chmod +x package/whisper-cli
+          strip package/whisper-cli || true
+          package/whisper-cli --help >/dev/null
+          ldd package/whisper-cli || true
+          ls -lh package/
+
+      - name: Upload transcription bundle
         uses: actions/upload-artifact@v4
         with:
-          name: whisper-model-tiny-q5_1
-          path: model/
+          name: whisper-small-q5_1-linux-x64
+          path: package/
           compression-level: 0
           retention-days: 1
           if-no-files-found: error
