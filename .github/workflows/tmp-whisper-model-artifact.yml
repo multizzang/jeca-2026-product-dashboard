@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - '.github/workflows/tmp-whisper-model-artifact.yml'
+  pull_request:
+    paths:
+      - 'tmp-whisper-model-trigger.txt'
 
 permissions:
   contents: read
