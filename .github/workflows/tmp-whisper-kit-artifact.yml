@@ -1,0 +1,73 @@
+name: Temporary Whisper kit artifact
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-whisper-kit-artifact.yml'
+
+permissions:
+  contents: write
+
+env:
+  MODEL_NAME: ggml-small-q5_1.bin
+  WHISPER_TAG: v1.8.4
+
+jobs:
+  package-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build static whisper-cli
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch "${WHISPER_TAG}" https://github.com/ggml-org/whisper.cpp.git whisper.cpp
+          cmake -S whisper.cpp -B whisper.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_SERVER=OFF
+          cmake --build whisper.cpp/build --config Release -j 2
+          test -x whisper.cpp/build/bin/whisper-cli
+          whisper.cpp/build/bin/whisper-cli --help >/dev/null
+
+      - name: Download and verify split model
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p model-parts kit
+          for suffix in aa ab ac ad ae af ag ah ai aj; do
+            curl -L --fail --retry 5 --retry-all-errors \
+              -o "model-parts/${MODEL_NAME}.part-${suffix}" \
+              "https://raw.githubusercontent.com/advexplorer/whisper/refs/heads/main/${MODEL_NAME}.part-${suffix}"
+          done
+          cat model-parts/${MODEL_NAME}.part-* > "kit/${MODEL_NAME}"
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  kit/ggml-small-q5_1.bin' | sha256sum -c -
+          cp whisper.cpp/build/bin/whisper-cli kit/
+          chmod +x kit/whisper-cli
+          printf 'whisper.cpp %s\nmodel sha256 ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb\n' "$WHISPER_TAG" > kit/README.txt
+          ls -lh kit
+
+      - name: Upload Whisper kit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-kit-small-q5_1
+          path: kit/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Record workflow run ID
+        shell: bash
+        run: |
+          set -euxo pipefail
+          printf '%s\n' "$GITHUB_RUN_ID" > tmp-whisper-kit-run-id.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tmp-whisper-kit-run-id.txt
+          git commit -m 'chore: record temporary Whisper kit run id'
+          git push origin HEAD:main
