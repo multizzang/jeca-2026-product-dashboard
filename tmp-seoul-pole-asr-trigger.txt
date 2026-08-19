@@ -1,0 +1,1 @@
+Trigger encrypted ASR for the two 2026-08-14 Seoul HQ concrete-pole diagnosis recordings.
