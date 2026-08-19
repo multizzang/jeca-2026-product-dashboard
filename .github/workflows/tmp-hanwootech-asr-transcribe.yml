@@ -33,7 +33,7 @@ jobs:
           DRIVE_FILE_ID: 1T02fFPzdZI-FjUojz4czALj4Sd1uvaCv
         run: |
           set -euxo pipefail
-          gdown --id "$DRIVE_FILE_ID" -O hanwootech.m4a
+          gdown "$DRIVE_FILE_ID" -O hanwootech.m4a
           test -s hanwootech.m4a
           ls -lh hanwootech.m4a
           duration=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 hanwootech.m4a)
@@ -49,6 +49,8 @@ jobs:
 
       - name: Transcribe in short multilingual chunks
         shell: bash
+        env:
+          HF_HUB_DISABLE_XET: '1'
         run: |
           set -euxo pipefail
           mkdir -p asr/chunks asr/output
