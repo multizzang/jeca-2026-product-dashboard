@@ -1,0 +1,1 @@
+Trigger temporary Whisper kit packaging for local transcription on 2026-08-19.
