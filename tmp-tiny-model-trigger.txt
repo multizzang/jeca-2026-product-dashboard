@@ -1,0 +1,2 @@
+Temporary trigger for the bilingual 2026-08-12 pole dismantling meeting-minutes transcription.
+Run bundle: small-q5_1 + static whisper-cli.
