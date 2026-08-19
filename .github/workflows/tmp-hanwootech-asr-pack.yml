@@ -1,0 +1,51 @@
+name: Temporary HanwooTech ASR pack
+
+on:
+  push:
+    branches:
+      - tmp/hanwootech-asr-20260819
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Prepare whisper.cpp binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p out /tmp/whisper-bin
+          curl -L --fail --retry 5 --retry-delay 2 \
+            -o /tmp/whisper-cpp-linux-x64-cpu.zip \
+            https://github.com/sjoerdteunisse/whisper.cpp/releases/download/v1.0.0/whisper-cpp-linux-x64-cpu.zip
+          unzip -o /tmp/whisper-cpp-linux-x64-cpu.zip -d /tmp/whisper-bin
+          find /tmp/whisper-bin -maxdepth 4 -type f -print
+          cp -a /tmp/whisper-bin/. out/
+          find out -type f -name 'whisper*' -exec chmod +x {} +
+
+      - name: Assemble multilingual small Q5_1 model
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/whisper-model
+          for suffix in aa ab ac ad ae af ag ah ai aj; do
+            curl -L --fail --retry 5 --retry-delay 2 \
+              -o "/tmp/whisper-model/ggml-small-q5_1.bin.part-${suffix}" \
+              "https://raw.githubusercontent.com/advexplorer/whisper/main/ggml-small-q5_1.bin.part-${suffix}"
+          done
+          cat /tmp/whisper-model/ggml-small-q5_1.bin.part-* > out/ggml-small-q5_1.bin
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  out/ggml-small-q5_1.bin' | sha256sum -c -
+          ls -lh out
+
+      - name: Upload reusable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanwootech-whisper-pack
+          path: out/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
