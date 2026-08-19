@@ -21,6 +21,8 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
           python -m pip install 'faster-whisper==1.2.0' 'gdown>=5.2.0'
           ffmpeg -version | head -1
@@ -57,9 +59,7 @@ jobs:
           python - <<'PY'
           from __future__ import annotations
           import json
-          import math
           import pathlib
-          import subprocess
           from faster_whisper import WhisperModel
 
           ROOT = pathlib.Path('asr')
