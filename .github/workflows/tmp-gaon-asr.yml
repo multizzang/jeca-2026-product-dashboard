@@ -1,0 +1,154 @@
+name: Temporary Gaon Cable bilingual ASR
+
+on:
+  pull_request:
+    paths:
+      - 'tmp-gaon-asr-trigger.txt'
+
+permissions:
+  contents: read
+
+env:
+  MODEL_NAME: ggml-small-q5_1.bin
+
+jobs:
+  transcribe:
+    name: ASR ${{ matrix.key }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - key: g1
+            file_id: 15hUjdxtRZulAu_Q-UKekWDvZ6rVX3EfI
+            label: 26081315_gaon_cable_1
+          - key: g2
+            file_id: 1X_9aMaggB1JID6aTvR8c4armq1JuF8sH
+            label: 26081316_gaon_cable_2_factory
+
+    steps:
+      - name: Install runtime and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg cmake build-essential git curl openssl
+          python -m pip install --quiet --upgrade pip gdown
+
+      - name: Download source audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/chunks work/model work/output work/secure
+          gdown --id '${{ matrix.file_id }}' -O work/input.m4a
+          test -s work/input.m4a
+          ffprobe -v error -show_format -show_streams -of json work/input.m4a > work/output/ffprobe.json
+          sha256sum work/input.m4a > work/output/source-audio.sha256
+
+      - name: Normalize and split into language-switching chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          ffmpeg -hide_banner -loglevel error -y \
+            -i work/input.m4a \
+            -af 'highpass=f=80,lowpass=f=7600,dynaudnorm=f=150:g=15' \
+            -ar 16000 -ac 1 -c:a pcm_s16le \
+            -f segment -segment_time 45 -reset_timestamps 1 \
+            work/chunks/chunk_%04d.wav
+          find work/chunks -type f -name 'chunk_*.wav' -size +1000c | sort > work/output/chunk-list.txt
+          test -s work/output/chunk-list.txt
+
+      - name: Build whisper.cpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git work/whisper.cpp >/dev/null 2>&1
+          cmake -S work/whisper.cpp -B work/whisper.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON >/dev/null
+          cmake --build work/whisper.cpp/build --config Release -j 4 >/dev/null
+          test -x work/whisper.cpp/build/bin/whisper-cli
+
+      - name: Reassemble multilingual small model
+        shell: bash
+        run: |
+          set -euo pipefail
+          for suffix in aa ab ac ad ae af ag ah ai aj; do
+            curl -L --fail --retry 5 --retry-all-errors --silent --show-error \
+              -o "work/model/${MODEL_NAME}.part-${suffix}" \
+              "https://raw.githubusercontent.com/advexplorer/whisper/refs/heads/main/${MODEL_NAME}.part-${suffix}"
+          done
+          cat work/model/${MODEL_NAME}.part-* > "work/model/${MODEL_NAME}"
+          echo 'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  work/model/ggml-small-q5_1.bin' | sha256sum -c -
+          rm -f work/model/${MODEL_NAME}.part-*
+
+      - name: Transcribe every 45-second chunk with automatic language detection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t CHUNKS < work/output/chunk-list.txt
+          CLI='work/whisper.cpp/build/bin/whisper-cli'
+          mkdir -p work/output/transcript
+          "$CLI" \
+            -m "work/model/${MODEL_NAME}" \
+            -l auto \
+            -t 2 -p 2 \
+            -bs 5 -bo 5 \
+            -mc 0 -sns \
+            --prompt '한국전력공사, 전력연구원, 차세대배전연구소, 동경전력 파워그리드, 東電PG, 도쿄전설서비스, TDS, 가온전선, 군포공장, 전선, 케이블, 가공배전선, 가공전선, 절연전선, 나전선, 피복전선, PP전선, AL-OC, ACSR, CNCV, CV케이블, 도체, 동선, 알루미늄선, 연선, 신선, 압출, 절연체, 반도전층, 가교폴리에틸렌, XLPE, 시스, 편심, 외경, 도전율, 인장강도, 절연저항, 수트리, 열화, 내열성, 난연성, 재활용, 친환경, 제조공정, 품질검사, 공정검사, 시험검사, 출하검사, 드럼, 포장, 장력, 이도, 弛度, 크리프, IEC 60889, 공동연구, 기술교류, 電線, ケーブル, 架空配電線, 被覆電線, 導体, 撚線, 押出, 架橋ポリエチレン, 張力, クリープ, 品質検査, 製造工程' \
+            -otxt -osrt -ojf \
+            "${CHUNKS[@]}" \
+            > work/output/transcript/whisper.stdout.log \
+            2> work/output/transcript/whisper.stderr.log
+          find work/chunks -maxdepth 1 -type f \( -name '*.txt' -o -name '*.srt' -o -name '*.json' \) -print0 \
+            | xargs -0 -r -I{} mv '{}' work/output/transcript/
+          printf '%s\n' '${{ matrix.label }}' > work/output/recording-label.txt
+          printf 'PASS\n' > work/output/STATUS.txt
+
+      - name: Package and encrypt transcript before artifact upload
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f work/output/STATUS.txt ]; then printf 'FAIL\n' > work/output/STATUS.txt; fi
+          cat > work/secure/public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEArQSq4e7xnTeRdYgBKGaC
+          qVmzz5zeJ3tx8mtMFcVydR5XnOA1IeppBCXTMDejheIChwfoHU4H2d6B81E4aZYD
+          Yu27fgXzLJtNAyHmJpYqEHzsWfrnfTs6NzgeDVuGelX5gHvItahi5x1oCSOS0sbb
+          kOebPOIQ3YMHNeru+xQzsk/gf9EDvX4PU7p0Imo/cPtRnSkS01ihJ1AICRsJmlAC
+          ZCKDCYj5IpGC+Ci07suhuUBirdclsGrBxQm3g/SUs0LDS6+5udB10IxBWx/Rr4XJ
+          uVQzQa/G54eVh1mTQTIs+X8mD8drNlLbgkWiHERz5JnCQP8i3v9+4IqGxLPSMiwg
+          KP2Slt6MwKYi9U5SConAgtZb5hb2H/WbWxkDGNG8rP56ovTBs6XXcJ5+nWONUt/g
+          hw/3OXTBV4c4QcDNc+NoZIc5lpDMx861ciMiu1VWQFm/VchfZ9t67MBWyatrJM9s
+          LeDfgLOmYNHGctwCbVrmoxUXW0Z0mYS9vC0aSgThgBunAgMBAAE=
+          -----END PUBLIC KEY-----
+          PEM
+          tar -C work/output -czf work/secure/transcript.tar.gz .
+          openssl rand -base64 48 > work/secure/passphrase.txt
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -pass file:work/secure/passphrase.txt \
+            -in work/secure/transcript.tar.gz \
+            -out work/secure/transcript.tar.gz.enc
+          openssl pkeyutl -encrypt -pubin \
+            -inkey work/secure/public.pem \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in work/secure/passphrase.txt \
+            -out work/secure/passphrase.rsa.enc
+          printf '%s\n' '${{ matrix.key }}' > work/secure/artifact-key.txt
+          rm -rf work/input.m4a work/chunks work/model work/whisper.cpp work/output \
+            work/secure/transcript.tar.gz work/secure/passphrase.txt work/secure/public.pem
+
+      - name: Upload encrypted result only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gaon-asr-${{ matrix.key }}-encrypted
+          path: work/secure/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
